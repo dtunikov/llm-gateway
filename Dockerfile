@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Build the Go application
-FROM golang:1.24.3-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,8 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o /llm-gateway ./cmd/llm-gateway
+ARG TARGETOS TARGETARCH
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /llm-gateway ./cmd/llm-gateway
 
 # Stage 2: Create the final lightweight image
 FROM alpine:latest
