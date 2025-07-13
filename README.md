@@ -53,11 +53,14 @@ LLM Gateway is a lightweight, high-performance proxy service built in Go (Golang
       openai:
         api_key: "your-openai-api-key"
         api_url: "https://api.openai.com/v1"
+        is_openai_compatible: true
       gemini:
         api_key: "your-gemini-api-key"
         api_url: "https://generativelanguage.googleapis.com"
+        is_openai_compatible: true
       ollama:
         api_url: "http://localhost:11434"
+        is_openai_compatible: true
 
     models:
       gpt-4.1: openai
