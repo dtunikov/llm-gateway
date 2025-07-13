@@ -6,9 +6,25 @@ on:
       - 'v*'
 
 jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.3'
+
+      - name: Run Go Tests
+        run: go test ./...
+
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    needs: test # Ensure tests pass before building Docker image
     outputs:
       json: ${{ steps.meta.outputs.json }}
     steps:
@@ -56,8 +72,8 @@ jobs:
       - name: Generate Job Summary
         run: |
           echo "### :whale: Image version:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
           for tag in "${{ steps.meta.outputs.tags }}"; do
             echo "${tag}" >> $GITHUB_STEP_SUMMARY
           done
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
