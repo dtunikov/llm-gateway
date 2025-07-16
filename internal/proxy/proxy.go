@@ -74,37 +74,54 @@ func (p *Proxy) ChatCompletionsHandler(c *gin.Context) {
 		return
 	}
 
-	providerName, ok := p.cfg.Models[req.Model]
+	modelConfig, ok := p.cfg.Models[req.Model]
 	if !ok {
 		slog.Error("Model not found in config", "model", req.Model)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Model not found"})
 		return
 	}
 
-	llmProvider, ok := p.providers[providerName]
-	if !ok {
-		slog.Error("Provider not found for model", "model", req.Model, "provider", providerName)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Provider not configured"})
-		return
+	modelsToTry := []string{req.Model}
+	modelsToTry = append(modelsToTry, modelConfig.Fallback...)
+
+	var resp *types.ChatCompletionResponse
+	var err error
+
+	for _, modelName := range modelsToTry {
+		currentModelConfig, ok := p.cfg.Models[modelName]
+		if !ok {
+			slog.Error("Fallback model not found in config", "model", modelName)
+			continue
+		}
+		providerName := currentModelConfig.Provider
+		llmProvider, ok := p.providers[providerName]
+		if !ok {
+			slog.Error("Provider not found for model", "model", modelName, "provider", providerName)
+			continue // Try next model
+		}
+
+		slog.Info("Sending request to provider", "model", modelName, "provider", providerName)
+		// Create a new request object for each attempt to avoid modifying the original
+		attemptReq := req
+		attemptReq.Model = modelName
+
+		resp, err = llmProvider.ChatCompletion(c.Request.Context(), &attemptReq)
+		if err == nil {
+			// Increment token usage metrics
+			if resp.Usage.PromptTokens > 0 {
+				promptTokensTotal.WithLabelValues(resp.Model, providerName).Add(float64(resp.Usage.PromptTokens))
+			}
+			if resp.Usage.CompletionTokens > 0 {
+				completionTokensTotal.WithLabelValues(resp.Model, providerName).Add(float64(resp.Usage.CompletionTokens))
+			}
+			if resp.Usage.TotalTokens > 0 {
+				totalTokensTotal.WithLabelValues(resp.Model, providerName).Add(float64(resp.Usage.TotalTokens))
+			}
+			c.JSON(http.StatusOK, resp)
+			return
+		}
+		slog.Error("Provider chat completion failed", "error", err, "model", modelName, "provider", providerName)
 	}
 
-	resp, err := llmProvider.ChatCompletion(c.Request.Context(), &req)
-	if err != nil {
-		slog.Error("Provider chat completion failed", "error", err, "model", req.Model, "provider", providerName)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get completion from provider"})
-		return
-	}
-
-	// Increment token usage metrics
-	if resp.Usage.PromptTokens > 0 {
-		promptTokensTotal.WithLabelValues(resp.Model, providerName).Add(float64(resp.Usage.PromptTokens))
-	}
-	if resp.Usage.CompletionTokens > 0 {
-		completionTokensTotal.WithLabelValues(resp.Model, providerName).Add(float64(resp.Usage.CompletionTokens))
-	}
-	if resp.Usage.TotalTokens > 0 {
-		totalTokensTotal.WithLabelValues(resp.Model, providerName).Add(float64(resp.Usage.TotalTokens))
-	}
-
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get completion from any provider"})
 }

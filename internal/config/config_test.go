@@ -23,7 +23,9 @@ providers:
     api_key: "test-key"
     api_url: "http://test.url"
 models:
-  test-model: test_provider
+  test-model:
+    provider: test_provider
+    fallback: ["fallback-model"]
 `)
 	assert.NoError(t, err)
 	tmpFile.Close()
@@ -40,7 +42,8 @@ models:
 	assert.Equal(t, "debug", cfg.Logging.Level)
 	assert.Equal(t, "test-key", cfg.Providers["test_provider"].APIKey)
 	assert.Equal(t, "http://test.url", cfg.Providers["test_provider"].APIUrl)
-	assert.Equal(t, "test_provider", cfg.Models["test-model"])
+	assert.Equal(t, "test_provider", cfg.Models["test-model"].Provider)
+	assert.Equal(t, []string{"fallback-model"}, cfg.Models["test-model"].Fallback)
 }
 
 func TestLoadConfigEnvOverride(t *testing.T) {

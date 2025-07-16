@@ -14,6 +14,11 @@ providers:
     is_openai_compatible: true
 
 models:
-  gpt-4.1: openai
-  llama2: ollama
-  dummy-model: dummy
+  gpt-4.1:
+    provider: openai
+    fallback:
+      - dummy-model
+  llama2:
+    provider: ollama
+  dummy-model:
+    provider: dummy

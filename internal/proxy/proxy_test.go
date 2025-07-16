@@ -28,6 +28,9 @@ func (m *MockProvider) Name() string {
 
 func (m *MockProvider) ChatCompletion(ctx context.Context, req *types.ChatCompletionRequest) (*types.ChatCompletionResponse, error) {
 	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*types.ChatCompletionResponse), args.Error(1)
 }
 
@@ -51,11 +54,6 @@ func TestProxy_ChatCompletionsHandler(t *testing.T) {
 		Model: "gemini-2.5-pro",
 		Usage: types.Usage{PromptTokens: 2, CompletionTokens: 2, TotalTokens: 4},
 	}, nil)
-	mockGeminiProvider.On("ChatCompletion", mock.Anything, mock.AnythingOfType("*types.ChatCompletionRequest")).Return(&types.ChatCompletionResponse{
-		ID:    "gemini-test-id",
-		Model: "gemini-2.5-pro",
-		Usage: types.Usage{PromptTokens: 2, CompletionTokens: 2, TotalTokens: 4},
-	}, nil)
 
 	mockDummyProvider.On("ChatCompletion", mock.Anything, mock.AnythingOfType("*types.ChatCompletionRequest")).Return(&types.ChatCompletionResponse{
 		ID:    "dummy-test-id",
@@ -65,10 +63,10 @@ func TestProxy_ChatCompletionsHandler(t *testing.T) {
 
 	// Create a config with model mappings
 	cfg := &config.Config{
-		Models: map[string]string{
-			"gpt-4.1":        "openai",
-			"gemini-2.5-pro": "gemini",
-			"dummy-model":    "dummy",
+		Models: map[string]config.ModelConfig{
+			"gpt-4.1":        {Provider: "openai", Fallback: []string{"gemini-2.5-pro"}},
+			"gemini-2.5-pro": {Provider: "gemini"},
+			"dummy-model":    {Provider: "dummy"},
 		},
 	}
 
@@ -95,15 +93,48 @@ func TestProxy_ChatCompletionsHandler(t *testing.T) {
 		model          string
 		expectedStatus int
 		expectedID     string
+		mockSetup      func()
 	}{
-		{name: "OpenAI Model", model: "gpt-4.1", expectedStatus: http.StatusOK, expectedID: "openai-test-id"},
-		{name: "Gemini Model", model: "gemini-2.5-pro", expectedStatus: http.StatusOK, expectedID: "gemini-test-id"},
-		{name: "Dummy Model", model: "dummy-model", expectedStatus: http.StatusOK, expectedID: "dummy-test-id"},
-		{name: "Unknown Model", model: "unknown-model", expectedStatus: http.StatusBadRequest, expectedID: ""},
+		{name: "OpenAI Model", model: "gpt-4.1", expectedStatus: http.StatusOK, expectedID: "openai-test-id", mockSetup: func() {
+			mockOpenAIProvider.On("ChatCompletion", mock.Anything, mock.AnythingOfType("*types.ChatCompletionRequest")).Return(&types.ChatCompletionResponse{
+				ID:    "openai-test-id",
+				Model: "gpt-4.1",
+				Usage: types.Usage{PromptTokens: 1, CompletionTokens: 1, TotalTokens: 2},
+			}, nil).Once()
+		}},
+		{name: "Gemini Model", model: "gemini-2.5-pro", expectedStatus: http.StatusOK, expectedID: "gemini-test-id", mockSetup: func() {
+			mockGeminiProvider.On("ChatCompletion", mock.Anything, mock.AnythingOfType("*types.ChatCompletionRequest")).Return(&types.ChatCompletionResponse{
+				ID:    "gemini-test-id",
+				Model: "gemini-2.5-pro",
+				Usage: types.Usage{PromptTokens: 2, CompletionTokens: 2, TotalTokens: 4},
+			}, nil).Once()
+		}},
+		{name: "Dummy Model", model: "dummy-model", expectedStatus: http.StatusOK, expectedID: "dummy-test-id", mockSetup: func() {
+			mockDummyProvider.On("ChatCompletion", mock.Anything, mock.AnythingOfType("*types.ChatCompletionRequest")).Return(&types.ChatCompletionResponse{
+				ID:    "dummy-test-id",
+				Model: "dummy-model",
+				Usage: types.Usage{PromptTokens: 3, CompletionTokens: 3, TotalTokens: 6},
+			}, nil).Once()
+		}},
+		{name: "Unknown Model", model: "unknown-model", expectedStatus: http.StatusBadRequest, expectedID: "", mockSetup: func() {}},
+		{name: "Fallback Model", model: "gpt-4.1", expectedStatus: http.StatusOK, expectedID: "gemini-test-id", mockSetup: func() {
+			mockOpenAIProvider.On("ChatCompletion", mock.Anything, mock.AnythingOfType("*types.ChatCompletionRequest")).Return(nil, assert.AnError).Once()
+			mockGeminiProvider.On("ChatCompletion", mock.Anything, mock.AnythingOfType("*types.ChatCompletionRequest")).Return(&types.ChatCompletionResponse{
+				ID:    "gemini-test-id",
+				Model: "gemini-2.5-pro",
+				Usage: types.Usage{PromptTokens: 2, CompletionTokens: 2, TotalTokens: 4},
+			}, nil).Once()
+		}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Setup mocks for each test
+			mockOpenAIProvider.Mock = mock.Mock{}
+			mockGeminiProvider.Mock = mock.Mock{}
+			mockDummyProvider.Mock = mock.Mock{}
+			tt.mockSetup()
+
 			reqBody := map[string]interface{}{
 				"model": tt.model,
 				"messages": []map[string]string{

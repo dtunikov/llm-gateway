@@ -14,11 +14,11 @@ import (
 // `env-description` provides a description for the environment variable.
 
 type Config struct {
-	Server    ServerConfig              `yaml:"server"`
-	Logging   LoggingConfig             `yaml:"logging"`
-	Providers map[string]ProviderConfig `yaml:"providers"`
-	Models    map[string]string         `yaml:"models"`
-	OpenAPI   OpenApiConfig             `yaml:"openapi"`
+	Server    ServerConfig               `yaml:"server"`
+	Logging   LoggingConfig              `yaml:"logging"`
+	Providers map[string]ProviderConfig  `yaml:"providers"`
+	Models    map[string]ModelConfig     `yaml:"models"`
+	OpenAPI   OpenApiConfig              `yaml:"openapi"`
 }
 
 type OpenApiConfig struct {
@@ -36,6 +36,12 @@ type ServerConfig struct {
 
 type LoggingConfig struct {
 	Level string `yaml:"level" env:"LOG_LEVEL" env-default:"info"`
+}
+
+// ModelConfig represents the configuration for a specific model.
+type ModelConfig struct {
+	Provider string   `yaml:"provider"`
+	Fallback []string `yaml:"fallback"`
 }
 
 // ProviderConfig represents the configuration for an LLM provider.
