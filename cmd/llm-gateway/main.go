@@ -26,7 +26,6 @@ func main() {
 		return
 	}
 
-	slog.Info("Access Swagger UI", "url", "http://localhost:"+cfg.Server.Port+"/swagger/")
 	if err := r.Run(":" + cfg.Server.Port); err != nil {
 		slog.Error("Failed to start server", "error", err)
 	}

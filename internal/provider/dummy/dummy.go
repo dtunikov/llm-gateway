@@ -11,9 +11,8 @@ import (
 // DummyProvider is a dummy implementation of the Provider interface.
 type DummyProvider struct{}
 
-// Name returns the name of the dummy provider.
-func (dp *DummyProvider) Name() string {
-	return "dummy"
+func NewDummyProvider() *DummyProvider {
+	return &DummyProvider{}
 }
 
 // ChatCompletion creates a dummy completion for the given chat conversation.

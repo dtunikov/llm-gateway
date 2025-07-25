@@ -1,24 +1,29 @@
 server:
   port: 8080
+  base_url: http://localhost:8080
 
 logging:
   level: info
 
 providers:
-  openai:
-    api_key: "your-openai-api-key"
-    api_url: "https://api.openai.com/v1"
-    is_openai_compatible: true
-  ollama:
-    api_url: "http://localhost:11434"
-    is_openai_compatible: true
+  - id: openai-1
+    provider: openai
+    config:
+      api_key: "your-openai-api-key"
+      api_url: "https://api.openai.com/v1"
+  - id: dummy-1
+    provider: dummy
+    config: {}
 
 models:
-  gpt-4.1:
-    provider: openai
+  - id: gpt-4.1
+    name: gpt-4.1
+    provider: openai-1
     fallback:
       - dummy-model
-  llama2:
+  - id: llama2
+    name: llama2
     provider: ollama
-  dummy-model:
-    provider: dummy
+  - id: dummy-model
+    name: dummy-model
+    provider: dummy-1

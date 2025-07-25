@@ -21,11 +21,6 @@ type MockProvider struct {
 	mock.Mock
 }
 
-func (m *MockProvider) Name() string {
-	args := m.Called()
-	return args.String(0)
-}
-
 func (m *MockProvider) ChatCompletion(ctx context.Context, req *types.ChatCompletionRequest) (*types.ChatCompletionResponse, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -63,10 +58,10 @@ func TestProxy_ChatCompletionsHandler(t *testing.T) {
 
 	// Create a config with model mappings
 	cfg := &config.Config{
-		Models: map[string]config.ModelConfig{
-			"gpt-4.1":        {Provider: "openai", Fallback: []string{"gemini-2.5-pro"}},
-			"gemini-2.5-pro": {Provider: "gemini"},
-			"dummy-model":    {Provider: "dummy"},
+		Models: []*config.ModelConfig{
+			{ID: "gpt-4.1", Name: "gpt-4.1", Provider: "openai", Fallback: []string{"gemini-2.5-pro"}},
+			{ID: "gemini-2.5-pro", Name: "gemini-2.5-pro", Provider: "gemini"},
+			{ID: "dummy-model", Name: "dummy-model", Provider: "dummy"},
 		},
 	}
 

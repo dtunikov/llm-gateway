@@ -10,6 +10,7 @@ window.onload = function() {
       SwaggerUIBundle.presets.apis,
       SwaggerUIStandalonePreset
     ],
+
     plugins: [
       SwaggerUIBundle.plugins.DownloadUrl
     ],

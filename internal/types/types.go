@@ -4,14 +4,14 @@ package types
 type ChatCompletionRequest struct {
 	Model            string         `json:"model"`
 	Messages         []ChatMessage  `json:"messages"`
-	Temperature      float32        `json:"temperature,omitempty"`
-	TopP             float32        `json:"top_p,omitempty"`
+	Temperature      float64        `json:"temperature,omitempty"`
+	TopP             float64        `json:"top_p,omitempty"`
 	N                int            `json:"n,omitempty"`
 	Stream           bool           `json:"stream,omitempty"`
 	Stop             []string       `json:"stop,omitempty"`
 	MaxTokens        int            `json:"max_tokens,omitempty"`
-	PresencePenalty  float32        `json:"presence_penalty,omitempty"`
-	FrequencyPenalty float32        `json:"frequency_penalty,omitempty"`
+	PresencePenalty  float64        `json:"presence_penalty,omitempty"`
+	FrequencyPenalty float64        `json:"frequency_penalty,omitempty"`
 	LogitBias        map[string]int `json:"logit_bias,omitempty"`
 	User             string         `json:"user,omitempty"`
 }
