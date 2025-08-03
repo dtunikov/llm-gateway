@@ -12,13 +12,15 @@ import (
 	langchaincompatible "github.com/dmitrii/llm-gateway/internal/provider/langchain_compatible"
 	"github.com/dmitrii/llm-gateway/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/googleai"
 	"github.com/tmc/langchaingo/llms/huggingface"
 	"github.com/tmc/langchaingo/llms/ollama"
-	"github.com/tmc/langchaingo/llms/openai"
+	llmsopenai "github.com/tmc/langchaingo/llms/openai"
 )
 
 var (
@@ -79,19 +81,19 @@ func NewProxy(cfg *config.Config) (*Proxy, error) {
 			)
 		case config.ProviderAzureOpenAI:
 			azureCfg := pCfg.Config.(*config.AzureOpenAIProviderConfig)
-			llm, err = openai.New(
-				openai.WithToken(azureCfg.APIKey),
-				openai.WithBaseURL(azureCfg.APIUrl),
-				openai.WithAPIVersion(azureCfg.ApiVersion),
-				openai.WithAPIType(azureCfg.ApiType),
+			llm, err = llmsopenai.New(
+				llmsopenai.WithToken(azureCfg.APIKey),
+				llmsopenai.WithBaseURL(azureCfg.APIUrl),
+				llmsopenai.WithAPIVersion(azureCfg.ApiVersion),
+				llmsopenai.WithAPIType(azureCfg.ApiType),
 			)
 		case config.ProviderOpenAI:
 			openaiCfg := pCfg.Config.(*config.OpenAIProviderConfig)
-			llm, err = openai.New(
-				openai.WithToken(openaiCfg.APIKey),
-				openai.WithBaseURL(openaiCfg.APIUrl),
-				openai.WithAPIVersion(openaiCfg.ApiVersion),
-				openai.WithOrganization(openaiCfg.OrgID),
+			llm, err = llmsopenai.New(
+				llmsopenai.WithToken(openaiCfg.APIKey),
+				llmsopenai.WithBaseURL(openaiCfg.APIUrl),
+				llmsopenai.WithAPIVersion(openaiCfg.ApiVersion),
+				llmsopenai.WithOrganization(openaiCfg.OrgID),
 			)
 
 		case config.ProviderGemini:
@@ -134,7 +136,7 @@ func NewProxy(cfg *config.Config) (*Proxy, error) {
 
 // ChatCompletionsHandler handles requests to the /v1/chat/completions endpoint.
 func (p *Proxy) ChatCompletionsHandler(c *gin.Context) {
-	var req types.ChatCompletionRequest
+	var req openai.ChatCompletionNewParams
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return

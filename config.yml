@@ -14,15 +14,19 @@ providers:
   - id: dummy-1
     provider: dummy
     config: {}
-
+  - id: ollama
+    provider: ollama
+    config:
+      api_url: "http://localhost:11434"
+ 
 models:
   - id: gpt-4.1
     name: gpt-4.1
     provider: openai-1
     fallback:
       - dummy-model
-  - id: llama2
-    name: llama2
+  - id: qwen3:0.6b
+    name: qwen3:0.6b
     provider: ollama
   - id: dummy-model
     name: dummy-model

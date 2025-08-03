@@ -6,9 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       CONFIG_PATH: "/app/config.yml"
+      OLLAMA_API_URL: "http://ollama:11434"
+      SERVER_BASE_URL: "http://localhost:8081"
     networks:
       - llm-gateway-network
 
@@ -36,8 +38,27 @@ services:
     networks:
       - llm-gateway-network
 
+  ollama:
+    image: ollama/ollama:0.10.0-rc1
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_DEBUG=1
+    command: ["serve"]
+    networks:
+      - llm-gateway-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   grafana-data:
+  ollama-data:
 
 networks:
   llm-gateway-network:

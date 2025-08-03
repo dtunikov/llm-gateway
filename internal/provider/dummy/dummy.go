@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dmitrii/llm-gateway/internal/types"
+	"github.com/openai/openai-go"
 )
 
 // DummyProvider is a dummy implementation of the Provider interface.
@@ -16,7 +17,7 @@ func NewDummyProvider() *DummyProvider {
 }
 
 // ChatCompletion creates a dummy completion for the given chat conversation.
-func (dp *DummyProvider) ChatCompletion(ctx context.Context, req *types.ChatCompletionRequest) (*types.ChatCompletionResponse, error) {
+func (dp *DummyProvider) ChatCompletion(ctx context.Context, req *openai.ChatCompletionNewParams) (*types.ChatCompletionResponse, error) {
 	// Simulate some work and token usage
 	time.Sleep(100 * time.Millisecond)
 

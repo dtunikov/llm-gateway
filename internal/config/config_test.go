@@ -8,22 +8,28 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
+	// Set up environment variables for the test
+	os.Setenv("SERVER_PORT", "9000")
+	os.Setenv("LOG_LEVEL", "debug")
+	os.Setenv("OPENAI_API_KEY", "test-key")
+	os.Setenv("OPENAI_API_URL", "http://test.url")
+	defer os.Unsetenv("SERVER_PORT")
+	defer os.Unsetenv("LOG_LEVEL")
+	defer os.Unsetenv("OPENAI_API_KEY")
+	defer os.Unsetenv("OPENAI_API_URL")
+
 	// Create a temporary config file
 	tmpFile, err := os.CreateTemp("", "config-*.yml")
 	assert.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
 	_, err = tmpFile.WriteString(`
-server:
-  port: "9000"
-logging:
-  level: "debug"
 providers:
   - id: openai-test
     provider: openai
     config:
-      api_key: "test-key"
-      api_url: "http://test.url"
+      api_key: "${OPENAI_API_KEY}"
+      api_url: "${OPENAI_API_URL}"
 models:
   - id: test-model
     name: test-model-name
@@ -94,6 +100,38 @@ func TestLoadConfigNotFound(t *testing.T) {
 	defer os.Unsetenv("CONFIG_PATH")
 
 	cfg, err := Load()
-	assert.Error(t, err)
-	assert.Nil(t, cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+}
+
+func TestLoadProviderEnvOverride(t *testing.T) {
+	// Create a temporary config file
+	tmpFile, err := os.CreateTemp("", "config-*.yml")
+	assert.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+
+	_, err = tmpFile.WriteString(`
+providers:
+  - id: openai-test
+    provider: openai
+    config:
+      api_key: "file-key"
+`)
+	assert.NoError(t, err)
+	tmpFile.Close()
+
+	// Set CONFIG_PATH and environment variables to override
+	os.Setenv("CONFIG_PATH", tmpFile.Name())
+	os.Setenv("OPENAI_API_KEY", "env-key")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("OPENAI_API_KEY")
+
+	cfg, err := Load()
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+
+	assert.Len(t, cfg.Providers, 1)
+	openAIConfig, ok := cfg.Providers[0].Config.(*OpenAIProviderConfig)
+	assert.True(t, ok)
+	assert.Equal(t, "env-key", openAIConfig.APIKey)
 }
