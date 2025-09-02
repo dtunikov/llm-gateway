@@ -1,0 +1,329 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LLM Gateway Configuration",
+  "description": "Configuration schema for LLM Gateway application",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "server": {
+      "type": "object",
+      "description": "Server configuration",
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "type": "string",
+          "description": "Port to listen on",
+          "default": "8080"
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Base URL for the server",
+          "default": "http://localhost:8080"
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "description": "Log level",
+          "default": "info",
+          "enum": ["trace", "debug", "info", "warn", "error", "fatal"]
+        }
+      }
+    },
+    "providers": {
+      "type": "array",
+      "description": "List of LLM providers",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "provider"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the provider"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider type",
+            "enum": ["openai", "azure_openai", "anthropic", "gemini", "ollama", "huggingface", "vertex_ai", "dummy"]
+          },
+          "config": {
+            "type": "object",
+            "description": "Provider-specific configuration"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "openai" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "api_key": {
+                      "type": "string",
+                      "description": "OpenAI API key"
+                    },
+                    "api_url": {
+                      "type": "string",
+                      "description": "OpenAI API URL",
+                      "default": "https://api.openai.com"
+                    },
+                    "org_id": {
+                      "type": "string",
+                      "description": "OpenAI organization ID"
+                    },
+                    "api_version": {
+                      "type": "string",
+                      "description": "OpenAI API version",
+                      "default": "v1"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "azure_openai" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "api_key": {
+                      "type": "string",
+                      "description": "Azure OpenAI API key"
+                    },
+                    "api_url": {
+                      "type": "string",
+                      "description": "Azure OpenAI API URL",
+                      "default": "https://{your-custom-endpoint}.openai.azure.com/"
+                    },
+                    "api_version": {
+                      "type": "string",
+                      "description": "Azure OpenAI API version",
+                      "default": "v1"
+                    },
+                    "api_type": {
+                      "type": "string",
+                      "description": "Azure OpenAI API type",
+                      "default": "AZURE"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "anthropic" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "api_key": {
+                      "type": "string",
+                      "description": "Anthropic API key"
+                    },
+                    "api_url": {
+                      "type": "string",
+                      "description": "Anthropic API URL",
+                      "default": "https://api.anthropic.com/v1"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "gemini" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "api_key": {
+                      "type": "string",
+                      "description": "Gemini API key"
+                    },
+                    "cloud_location": {
+                      "type": "string",
+                      "description": "Gemini cloud location",
+                      "default": "us-central1"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "ollama" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "api_url": {
+                      "type": "string",
+                      "description": "Ollama API URL",
+                      "default": "http://localhost:11434"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "huggingface" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "api_key": {
+                      "type": "string",
+                      "description": "HuggingFace API key"
+                    },
+                    "api_url": {
+                      "type": "string",
+                      "description": "HuggingFace API URL",
+                      "default": "https://api-inference.huggingface.co"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "vertex_ai" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "project_id": {
+                      "type": "string",
+                      "description": "Vertex AI project ID"
+                    },
+                    "location": {
+                      "type": "string",
+                      "description": "Vertex AI location",
+                      "default": "us-central1"
+                    },
+                    "path_to_creds_file": {
+                      "type": "string",
+                      "description": "Path to Vertex AI credentials file"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "const": "dummy" }
+              }
+            },
+            "then": {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Dummy provider configuration (no additional properties)"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "models": {
+      "type": "array",
+      "description": "List of model configurations",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "provider"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the model"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the model"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider ID that this model uses"
+          },
+          "fallback": {
+            "type": "array",
+            "description": "List of fallback model IDs",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "openapi": {
+      "type": "object",
+      "description": "OpenAPI configuration",
+      "additionalProperties": false,
+      "properties": {
+        "spec_path": {
+          "type": "string",
+          "description": "Path to OpenAPI specification file",
+          "default": "./api/openapi.yaml"
+        },
+        "ui_path": {
+          "type": "string",
+          "description": "Path to Swagger UI files",
+          "default": "./api/swagger-ui"
+        }
+      }
+    }
+  }
+}

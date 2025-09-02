@@ -180,5 +180,14 @@ func Load() (*Config, error) {
 		}
 	}
 
+	configBytes, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshal config to yaml: %w", err)
+	}
+	err = ValidateConfig(configBytes)
+	if err != nil {
+		return nil, fmt.Errorf("router config validation error: %w", err)
+	}
+
 	return &cfg, nil
 }
