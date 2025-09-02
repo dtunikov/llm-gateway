@@ -5,12 +5,11 @@ package provider
 import (
 	"context"
 
-	"github.com/dmitrii/llm-gateway/internal/types"
-	"github.com/openai/openai-go"
+	"github.com/dmitrii/llm-gateway/api"
 )
 
 // Provider is the interface that all LLM providers must implement.
 type Provider interface {
 	// ChatCompletion creates a completion for the given chat conversation.
-	ChatCompletion(ctx context.Context, req *openai.ChatCompletionNewParams) (*types.ChatCompletionResponse, error)
+	ChatCompletion(ctx context.Context, req *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error)
 }

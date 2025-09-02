@@ -10,9 +10,8 @@ import (
 	mm_atomic "sync/atomic"
 	mm_time "time"
 
-	"github.com/dmitrii/llm-gateway/internal/types"
+	"github.com/dmitrii/llm-gateway/api"
 	"github.com/gojuno/minimock/v3"
-	"github.com/openai/openai-go"
 )
 
 // ProviderMock implements Provider
@@ -20,9 +19,9 @@ type ProviderMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
-	funcChatCompletion          func(ctx context.Context, req *openai.ChatCompletionNewParams) (cp1 *types.ChatCompletionResponse, err error)
+	funcChatCompletion          func(ctx context.Context, req *api.ChatCompletionRequest) (cp1 *api.ChatCompletionResponse, err error)
 	funcChatCompletionOrigin    string
-	inspectFuncChatCompletion   func(ctx context.Context, req *openai.ChatCompletionNewParams)
+	inspectFuncChatCompletion   func(ctx context.Context, req *api.ChatCompletionRequest)
 	afterChatCompletionCounter  uint64
 	beforeChatCompletionCounter uint64
 	ChatCompletionMock          mProviderMockChatCompletion
@@ -71,18 +70,18 @@ type ProviderMockChatCompletionExpectation struct {
 // ProviderMockChatCompletionParams contains parameters of the Provider.ChatCompletion
 type ProviderMockChatCompletionParams struct {
 	ctx context.Context
-	req *openai.ChatCompletionNewParams
+	req *api.ChatCompletionRequest
 }
 
 // ProviderMockChatCompletionParamPtrs contains pointers to parameters of the Provider.ChatCompletion
 type ProviderMockChatCompletionParamPtrs struct {
 	ctx *context.Context
-	req **openai.ChatCompletionNewParams
+	req **api.ChatCompletionRequest
 }
 
 // ProviderMockChatCompletionResults contains results of the Provider.ChatCompletion
 type ProviderMockChatCompletionResults struct {
-	cp1 *types.ChatCompletionResponse
+	cp1 *api.ChatCompletionResponse
 	err error
 }
 
@@ -104,7 +103,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) Optional() *mProviderMockCh
 }
 
 // Expect sets up expected params for Provider.ChatCompletion
-func (mmChatCompletion *mProviderMockChatCompletion) Expect(ctx context.Context, req *openai.ChatCompletionNewParams) *mProviderMockChatCompletion {
+func (mmChatCompletion *mProviderMockChatCompletion) Expect(ctx context.Context, req *api.ChatCompletionRequest) *mProviderMockChatCompletion {
 	if mmChatCompletion.mock.funcChatCompletion != nil {
 		mmChatCompletion.mock.t.Fatalf("ProviderMock.ChatCompletion mock is already set by Set")
 	}
@@ -152,7 +151,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) ExpectCtxParam1(ctx context
 }
 
 // ExpectReqParam2 sets up expected param req for Provider.ChatCompletion
-func (mmChatCompletion *mProviderMockChatCompletion) ExpectReqParam2(req *openai.ChatCompletionNewParams) *mProviderMockChatCompletion {
+func (mmChatCompletion *mProviderMockChatCompletion) ExpectReqParam2(req *api.ChatCompletionRequest) *mProviderMockChatCompletion {
 	if mmChatCompletion.mock.funcChatCompletion != nil {
 		mmChatCompletion.mock.t.Fatalf("ProviderMock.ChatCompletion mock is already set by Set")
 	}
@@ -175,7 +174,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) ExpectReqParam2(req *openai
 }
 
 // Inspect accepts an inspector function that has same arguments as the Provider.ChatCompletion
-func (mmChatCompletion *mProviderMockChatCompletion) Inspect(f func(ctx context.Context, req *openai.ChatCompletionNewParams)) *mProviderMockChatCompletion {
+func (mmChatCompletion *mProviderMockChatCompletion) Inspect(f func(ctx context.Context, req *api.ChatCompletionRequest)) *mProviderMockChatCompletion {
 	if mmChatCompletion.mock.inspectFuncChatCompletion != nil {
 		mmChatCompletion.mock.t.Fatalf("Inspect function is already set for ProviderMock.ChatCompletion")
 	}
@@ -186,7 +185,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) Inspect(f func(ctx context.
 }
 
 // Return sets up results that will be returned by Provider.ChatCompletion
-func (mmChatCompletion *mProviderMockChatCompletion) Return(cp1 *types.ChatCompletionResponse, err error) *ProviderMock {
+func (mmChatCompletion *mProviderMockChatCompletion) Return(cp1 *api.ChatCompletionResponse, err error) *ProviderMock {
 	if mmChatCompletion.mock.funcChatCompletion != nil {
 		mmChatCompletion.mock.t.Fatalf("ProviderMock.ChatCompletion mock is already set by Set")
 	}
@@ -200,7 +199,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) Return(cp1 *types.ChatCompl
 }
 
 // Set uses given function f to mock the Provider.ChatCompletion method
-func (mmChatCompletion *mProviderMockChatCompletion) Set(f func(ctx context.Context, req *openai.ChatCompletionNewParams) (cp1 *types.ChatCompletionResponse, err error)) *ProviderMock {
+func (mmChatCompletion *mProviderMockChatCompletion) Set(f func(ctx context.Context, req *api.ChatCompletionRequest) (cp1 *api.ChatCompletionResponse, err error)) *ProviderMock {
 	if mmChatCompletion.defaultExpectation != nil {
 		mmChatCompletion.mock.t.Fatalf("Default expectation is already set for the Provider.ChatCompletion method")
 	}
@@ -216,7 +215,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) Set(f func(ctx context.Cont
 
 // When sets expectation for the Provider.ChatCompletion which will trigger the result defined by the following
 // Then helper
-func (mmChatCompletion *mProviderMockChatCompletion) When(ctx context.Context, req *openai.ChatCompletionNewParams) *ProviderMockChatCompletionExpectation {
+func (mmChatCompletion *mProviderMockChatCompletion) When(ctx context.Context, req *api.ChatCompletionRequest) *ProviderMockChatCompletionExpectation {
 	if mmChatCompletion.mock.funcChatCompletion != nil {
 		mmChatCompletion.mock.t.Fatalf("ProviderMock.ChatCompletion mock is already set by Set")
 	}
@@ -231,7 +230,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) When(ctx context.Context, r
 }
 
 // Then sets up Provider.ChatCompletion return parameters for the expectation previously defined by the When method
-func (e *ProviderMockChatCompletionExpectation) Then(cp1 *types.ChatCompletionResponse, err error) *ProviderMock {
+func (e *ProviderMockChatCompletionExpectation) Then(cp1 *api.ChatCompletionResponse, err error) *ProviderMock {
 	e.results = &ProviderMockChatCompletionResults{cp1, err}
 	return e.mock
 }
@@ -258,7 +257,7 @@ func (mmChatCompletion *mProviderMockChatCompletion) invocationsDone() bool {
 }
 
 // ChatCompletion implements Provider
-func (mmChatCompletion *ProviderMock) ChatCompletion(ctx context.Context, req *openai.ChatCompletionNewParams) (cp1 *types.ChatCompletionResponse, err error) {
+func (mmChatCompletion *ProviderMock) ChatCompletion(ctx context.Context, req *api.ChatCompletionRequest) (cp1 *api.ChatCompletionResponse, err error) {
 	mm_atomic.AddUint64(&mmChatCompletion.beforeChatCompletionCounter, 1)
 	defer mm_atomic.AddUint64(&mmChatCompletion.afterChatCompletionCounter, 1)
 

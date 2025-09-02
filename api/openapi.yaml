@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
 openapi: 3.0.0
 info:
   title: LLM Gateway API
@@ -34,50 +35,193 @@ paths:
 
 components:
   schemas:
+
     ChatCompletionRequest:
       type: object
+      required:
+        - model
+        - messages
       properties:
         model:
           type: string
+          description: ID of the model to use.
         messages:
           type: array
+          description: The conversation so far.
           items:
             $ref: '#/components/schemas/ChatMessage'
         temperature:
           type: number
           format: float
+          minimum: 0
+          maximum: 2
+          default: 1.0
+          description: Sampling temperature to use.
         top_p:
           type: number
           format: float
+          minimum: 0
+          maximum: 1
+          default: 1.0
+          description: Nucleus sampling probability.
         n:
           type: integer
+          minimum: 1
+          default: 1
+          description: Number of completions to generate.
         stream:
           type: boolean
+          default: false
+          description: Whether to stream back results.
+        stop:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          description: Sequences where the API will stop generating further tokens.
         max_tokens:
           type: integer
+          minimum: 1
+          description: Maximum number of tokens to generate.
         presence_penalty:
           type: number
           format: float
+          minimum: -2
+          maximum: 2
+          default: 0
+          description: Penalize new topic tokens.
         frequency_penalty:
           type: number
           format: float
+          minimum: -2
+          maximum: 2
+          default: 0
+          description: Penalize frequent tokens.
+        logit_bias:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Modify probability of specific tokens.
+        user:
+          type: string
+          description: A unique identifier representing your end-user.
+        functions:
+          type: array
+          items:
+            $ref: '#/components/schemas/FunctionDefinition'
+          description: Tool definitions (function calling).
+        function_call:
+          oneOf:
+            - type: string
+              enum: ["none", "auto"]
+            - type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+          description: Force or guide function selection.
 
     ChatMessage:
       type: object
+      required:
+        - role
       properties:
         role:
           type: string
-          enum: [system, user, assistant]
+          enum: [system, user, assistant, tool, function]
         content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                $ref: '#/components/schemas/MessageContentPart'
+        name:
           type: string
+          description: Optional name for function/tool messages.
+        tool_call_id:
+          type: string
+          description: Tool call this message responds to (if role=tool).
+        function_call:
+          $ref: '#/components/schemas/FunctionCall'
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolCall'
+
+    MessageContentPart:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [text, image_url]
+        text:
+          type: string
+        image_url:
+          type: object
+          required: [url]
+          properties:
+            url:
+              type: string
+              format: uri
+              
+    FunctionDefinition:
+      type: object
+      required:
+        - name
+        - parameters
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: object
+          description: JSON Schema defining the function parameters.
+
+    FunctionCall:
+      type: object
+      required:
+        - name
+        - arguments
+      properties:
+        name:
+          type: string
+        arguments:
+          type: string
+          description: JSON string of arguments
+
+    ToolCall:
+      type: object
+      required:
+        - id
+        - type
+        - function
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: ["function"]
+        function:
+          $ref: '#/components/schemas/FunctionCall'
 
     ChatCompletionResponse:
       type: object
+      required:
+        - id
+        - object
+        - created
+        - model
+        - choices
       properties:
         id:
           type: string
         object:
           type: string
+          example: "chat.completion"
         created:
           type: integer
         model:
@@ -86,9 +230,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatCompletionChoice'
+        usage:
+          $ref: '#/components/schemas/Usage'
 
     ChatCompletionChoice:
       type: object
+      required:
+        - index
+        - message
+        - finish_reason
       properties:
         index:
           type: integer
@@ -96,12 +246,32 @@ components:
           $ref: '#/components/schemas/ChatMessage'
         finish_reason:
           type: string
+          enum: [stop, length, content_filter, function_call, tool_calls]
+
+    Usage:
+      type: object
+      required:
+        - prompt_tokens
+        - completion_tokens
+        - total_tokens
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
 
     ErrorResponse:
       type: object
+      required:
+        - error
       properties:
         error:
           type: object
+          required:
+            - message
+            - type
           properties:
             message:
               type: string
@@ -109,5 +279,7 @@ components:
               type: string
             param:
               type: string
+              nullable: true
             code:
               type: string
+              nullable: true

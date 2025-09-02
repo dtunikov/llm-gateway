@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dmitrii/llm-gateway/internal/types"
-	"github.com/openai/openai-go"
+	"github.com/dmitrii/llm-gateway/api"
 )
 
 // DummyProvider is a dummy implementation of the Provider interface.
@@ -17,7 +16,7 @@ func NewDummyProvider() *DummyProvider {
 }
 
 // ChatCompletion creates a dummy completion for the given chat conversation.
-func (dp *DummyProvider) ChatCompletion(ctx context.Context, req *openai.ChatCompletionNewParams) (*types.ChatCompletionResponse, error) {
+func (dp *DummyProvider) ChatCompletion(ctx context.Context, req *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error) {
 	// Simulate some work and token usage
 	time.Sleep(100 * time.Millisecond)
 
@@ -25,19 +24,21 @@ func (dp *DummyProvider) ChatCompletion(ctx context.Context, req *openai.ChatCom
 	completionTokens := 10
 	totalTokens := promptTokens + completionTokens
 
-	resp := &types.ChatCompletionResponse{
-		ID:      fmt.Sprintf("dummy-cmpl-%d", time.Now().UnixNano()),
+	content := &api.ChatMessage_Content{}
+	content.FromChatMessageContent0("Hello! This is a dummy response.")
+	resp := &api.ChatCompletionResponse{
+		Id:      fmt.Sprintf("dummy-cmpl-%d", time.Now().UnixNano()),
 		Object:  "chat.completion",
-		Created: time.Now().Unix(),
+		Created: int(time.Now().Unix()),
 		Model:   req.Model,
-		Choices: []types.ChatCompletionChoice{
+		Choices: []api.ChatCompletionChoice{
 			{
 				Index:        0,
-				Message:      types.ChatMessage{Role: "assistant", Content: "This is a dummy response."},
+				Message:      api.ChatMessage{Role: "assistant", Content: content},
 				FinishReason: "stop",
 			},
 		},
-		Usage: types.Usage{
+		Usage: &api.Usage{
 			PromptTokens:     promptTokens,
 			CompletionTokens: completionTokens,
 			TotalTokens:      totalTokens,

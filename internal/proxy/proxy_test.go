@@ -1,153 +1,639 @@
+/*
+Package proxy_test contains comprehensive unit tests for the proxy package.
+
+Test Coverage:
+- NewProxy function: Tests successful proxy creation with various configurations and error handling
+- ChatCompletionsHandler: Tests the main request handling logic including:
+  - Successful completion with proper model and provider mapping
+  - Model not found scenarios
+  - Provider not found scenarios
+  - Fallback logic when primary provider fails
+  - Error handling when all providers fail
+  - Invalid fallback model configurations
+  - Token metrics tracking with various usage scenarios
+
+The tests use mock providers to isolate the proxy logic and validate the behavior
+without requiring actual LLM provider connections.
+*/
+
 package proxy
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
+	"github.com/dmitrii/llm-gateway/api"
 	"github.com/dmitrii/llm-gateway/internal/config"
+	internalerrors "github.com/dmitrii/llm-gateway/internal/errors"
 	"github.com/dmitrii/llm-gateway/internal/provider"
-	"github.com/dmitrii/llm-gateway/internal/types"
-	"github.com/gin-gonic/gin"
-	"github.com/gojuno/minimock/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestProxy_ChatCompletionsHandler(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+// Helper function to create chat message content
+func createChatContent(text string) *api.ChatMessage_Content {
+	content := &api.ChatMessage_Content{}
+	content.FromChatMessageContent0(text)
+	return content
+}
 
-	// Create a config with model mappings
-	cfg := &config.Config{
-		Models: []*config.ModelConfig{
-			{ID: "gpt-4.1", Name: "gpt-4.1", Provider: "openai", Fallback: []string{"gemini-2.5-pro"}},
-			{ID: "gemini-2.5-pro", Name: "gemini-2.5-pro", Provider: "gemini"},
-			{ID: "dummy-model", Name: "dummy-model", Provider: "dummy"},
-		},
-	}
-
-	// Test cases
+func TestNewProxy_Success(t *testing.T) {
 	tests := []struct {
-		name           string
-		model          string
-		expectedStatus int
-		expectedID     string
-		mockSetup      func(mockOpenAI, mockGemini, mockDummy *provider.ProviderMock)
+		name   string
+		config *config.Config
 	}{
 		{
-			name:           "OpenAI Model",
-			model:          "gpt-4.1",
-			expectedStatus: http.StatusOK,
-			expectedID:     "openai-test-id",
-			mockSetup: func(mockOpenAI, mockGemini, mockDummy *provider.ProviderMock) {
-				mockOpenAI.ChatCompletionMock.Return(&types.ChatCompletionResponse{
-					ID:    "openai-test-id",
-					Model: "gpt-4.1",
-					Usage: types.Usage{PromptTokens: 1, CompletionTokens: 1, TotalTokens: 2},
-				}, nil)
+			name: "empty config",
+			config: &config.Config{
+				Providers: []*config.ProviderConfig{},
+				Models:    []*config.ModelConfig{},
 			},
 		},
 		{
-			name:           "Gemini Model",
-			model:          "gemini-2.5-pro",
-			expectedStatus: http.StatusOK,
-			expectedID:     "gemini-test-id",
-			mockSetup: func(mockOpenAI, mockGemini, mockDummy *provider.ProviderMock) {
-				mockGemini.ChatCompletionMock.Return(&types.ChatCompletionResponse{
-					ID:    "gemini-test-id",
-					Model: "gemini-2.5-pro",
-					Usage: types.Usage{PromptTokens: 2, CompletionTokens: 2, TotalTokens: 4},
-				}, nil)
+			name: "dummy provider only",
+			config: &config.Config{
+				Providers: []*config.ProviderConfig{
+					{
+						ID:       "dummy1",
+						Provider: config.ProviderDummy,
+						Config:   &config.DummyProviderConfig{},
+					},
+				},
+				Models: []*config.ModelConfig{
+					{
+						ID:       "test-model",
+						Name:     "test-model",
+						Provider: "dummy1",
+						Fallback: []string{},
+					},
+				},
 			},
 		},
 		{
-			name:           "Dummy Model",
-			model:          "dummy-model",
-			expectedStatus: http.StatusOK,
-			expectedID:     "dummy-test-id",
-			mockSetup: func(mockOpenAI, mockGemini, mockDummy *provider.ProviderMock) {
-				mockDummy.ChatCompletionMock.Return(&types.ChatCompletionResponse{
-					ID:    "dummy-test-id",
-					Model: "dummy-model",
-					Usage: types.Usage{PromptTokens: 3, CompletionTokens: 3, TotalTokens: 6},
-				}, nil)
-			},
-		},
-		{
-			name:           "Unknown Model",
-			model:          "unknown-model",
-			expectedStatus: http.StatusBadRequest,
-			expectedID:     "",
-			mockSetup:      func(mockOpenAI, mockGemini, mockDummy *provider.ProviderMock) {},
-		},
-		{
-			name:           "Fallback Model",
-			model:          "gpt-4.1",
-			expectedStatus: http.StatusOK,
-			expectedID:     "gemini-test-id",
-			mockSetup: func(mockOpenAI, mockGemini, mockDummy *provider.ProviderMock) {
-				mockOpenAI.ChatCompletionMock.Return(nil, errors.New("openai error"))
-				mockGemini.ChatCompletionMock.Return(&types.ChatCompletionResponse{
-					ID:    "gemini-test-id",
-					Model: "gemini-2.5-pro",
-					Usage: types.Usage{PromptTokens: 2, CompletionTokens: 2, TotalTokens: 4},
-				}, nil)
+			name: "multiple dummy providers",
+			config: &config.Config{
+				Providers: []*config.ProviderConfig{
+					{
+						ID:       "dummy1",
+						Provider: config.ProviderDummy,
+						Config:   &config.DummyProviderConfig{},
+					},
+					{
+						ID:       "dummy2",
+						Provider: config.ProviderDummy,
+						Config:   &config.DummyProviderConfig{},
+					},
+				},
+				Models: []*config.ModelConfig{
+					{
+						ID:       "test-model-1",
+						Name:     "test-model-1",
+						Provider: "dummy1",
+						Fallback: []string{"test-model-2"},
+					},
+					{
+						ID:       "test-model-2",
+						Name:     "test-model-2",
+						Provider: "dummy2",
+						Fallback: []string{},
+					},
+				},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create fresh mock controller for each test
-			mc := minimock.NewController(t)
+			proxy, err := NewProxy(tt.config)
+			require.NoError(t, err)
+			require.NotNil(t, proxy)
+			assert.Equal(t, tt.config, proxy.cfg)
+			assert.Equal(t, len(tt.config.Providers), len(proxy.providers))
+		})
+	}
+}
 
-			// Create fresh mock providers for each test
-			mockOpenAIProvider := provider.NewProviderMock(mc)
-			mockGeminiProvider := provider.NewProviderMock(mc)
-			mockDummyProvider := provider.NewProviderMock(mc)
-
-			// Setup mocks for each test
-			tt.mockSetup(mockOpenAIProvider, mockGeminiProvider, mockDummyProvider)
-
-			// Create a map of providers
-			providers := map[string]provider.Provider{
-				"openai": mockOpenAIProvider,
-				"gemini": mockGeminiProvider,
-				"dummy":  mockDummyProvider,
-			}
-
-			// Create the Proxy instance
-			llmProxy := &Proxy{
-				cfg:       cfg,
-				providers: providers,
-			}
-
-			// Create a Gin router and register the handler
-			r := gin.New()
-			r.POST("/v1/chat/completions", llmProxy.ChatCompletionsHandler)
-
-			reqBody := map[string]interface{}{
-				"model": tt.model,
-				"messages": []map[string]string{
-					{"role": "user", "content": "test"},
+func TestNewProxy_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name           string
+		config         *config.Config
+		expectedErrMsg string
+	}{
+		{
+			name: "invalid openai config",
+			config: &config.Config{
+				Providers: []*config.ProviderConfig{
+					{
+						ID:       "openai1",
+						Provider: config.ProviderOpenAI,
+						Config: &config.OpenAIProviderConfig{
+							APIKey:     "", // invalid empty key
+							APIUrl:     "https://api.openai.com",
+							ApiVersion: "v1",
+						},
+					},
 				},
+				Models: []*config.ModelConfig{},
+			},
+			expectedErrMsg: "failed to create LLM model for provider openai1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			proxy, err := NewProxy(tt.config)
+			assert.Nil(t, proxy)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErrMsg)
+		})
+	}
+}
+
+func TestChatCompletionsHandler_Success(t *testing.T) {
+	// Create a mock provider
+	mockProvider := provider.NewProviderMock(t)
+
+	// Setup test configuration
+	cfg := &config.Config{
+		Models: []*config.ModelConfig{
+			{
+				ID:       "test-model",
+				Name:     "actual-model-name",
+				Provider: "test-provider",
+				Fallback: []string{},
+			},
+		},
+	}
+
+	// Create proxy with mock provider
+	proxy := &Proxy{
+		cfg: cfg,
+		providers: map[string]provider.Provider{
+			"test-provider": mockProvider,
+		},
+	}
+
+	// Create content for test request
+	userContent := createChatContent("Hello, world!")
+
+	// Test request
+	req := api.ChatCompletionRequest{
+		Model: "test-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: userContent,
+			},
+		},
+	}
+
+	// Create content for expected response
+	assistantContent := createChatContent("Hello! How can I help you today?")
+
+	// Expected response
+	expectedResp := &api.ChatCompletionResponse{
+		Id:      "test-id",
+		Object:  "chat.completion",
+		Created: 1234567890,
+		Model:   "actual-model-name",
+		Choices: []api.ChatCompletionChoice{
+			{
+				Index: 0,
+				Message: api.ChatMessage{
+					Role:    api.ChatMessageRoleAssistant,
+					Content: assistantContent,
+				},
+				FinishReason: api.ChatCompletionChoiceFinishReasonStop,
+			},
+		},
+		Usage: &api.Usage{
+			PromptTokens:     10,
+			CompletionTokens: 15,
+			TotalTokens:      25,
+		},
+	}
+
+	// Create content for mock expectation
+	mockUserContent := createChatContent("Hello, world!")
+
+	// Setup mock expectation
+	mockProvider.ChatCompletionMock.Expect(context.Background(), &api.ChatCompletionRequest{
+		Model: "actual-model-name",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: mockUserContent,
+			},
+		},
+	}).Return(expectedResp, nil)
+
+	// Execute the handler
+	ctx := context.Background()
+	resp, err := proxy.ChatCompletionsHandler(ctx, req)
+
+	// Verify results
+	require.NoError(t, err)
+	assert.Equal(t, expectedResp, resp)
+}
+
+func TestChatCompletionsHandler_ModelNotFound(t *testing.T) {
+	cfg := &config.Config{
+		Models: []*config.ModelConfig{},
+	}
+
+	proxy := &Proxy{
+		cfg:       cfg,
+		providers: map[string]provider.Provider{},
+	}
+
+	req := api.ChatCompletionRequest{
+		Model: "non-existent-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello"),
+			},
+		},
+	}
+
+	ctx := context.Background()
+	resp, err := proxy.ChatCompletionsHandler(ctx, req)
+
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+	assert.Equal(t, internalerrors.ErrNotFound.WithMessage("model not found in config"), err)
+}
+
+func TestChatCompletionsHandler_ProviderNotFound(t *testing.T) {
+	cfg := &config.Config{
+		Models: []*config.ModelConfig{
+			{
+				ID:       "test-model",
+				Name:     "actual-model-name",
+				Provider: "non-existent-provider",
+				Fallback: []string{},
+			},
+		},
+	}
+
+	proxy := &Proxy{
+		cfg:       cfg,
+		providers: map[string]provider.Provider{},
+	}
+
+	req := api.ChatCompletionRequest{
+		Model: "test-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello"),
+			},
+		},
+	}
+
+	ctx := context.Background()
+	resp, err := proxy.ChatCompletionsHandler(ctx, req)
+
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+	assert.Equal(t, internalerrors.ErrInternal.WithMessage("failed to get completion from any provider"), err)
+}
+
+func TestChatCompletionsHandler_FallbackSuccess(t *testing.T) {
+	// Create mock providers
+	mockProvider1 := provider.NewProviderMock(t)
+	mockProvider2 := provider.NewProviderMock(t)
+
+	// Setup test configuration with fallback
+	cfg := &config.Config{
+		Models: []*config.ModelConfig{
+			{
+				ID:       "test-model",
+				Name:     "primary-model",
+				Provider: "provider1",
+				Fallback: []string{"fallback-model"},
+			},
+			{
+				ID:       "fallback-model",
+				Name:     "backup-model",
+				Provider: "provider2",
+				Fallback: []string{},
+			},
+		},
+	}
+
+	// Create proxy with mock providers
+	proxy := &Proxy{
+		cfg: cfg,
+		providers: map[string]provider.Provider{
+			"provider1": mockProvider1,
+			"provider2": mockProvider2,
+		},
+	}
+
+	// Test request
+	req := api.ChatCompletionRequest{
+		Model: "test-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}
+
+	// Expected response from fallback provider
+	expectedResp := &api.ChatCompletionResponse{
+		Id:      "fallback-id",
+		Object:  "chat.completion",
+		Created: 1234567890,
+		Model:   "backup-model",
+		Choices: []api.ChatCompletionChoice{
+			{
+				Index: 0,
+				Message: api.ChatMessage{
+					Role:    api.ChatMessageRoleAssistant,
+					Content: createChatContent("Hello from fallback!"),
+				},
+				FinishReason: api.ChatCompletionChoiceFinishReasonStop,
+			},
+		},
+		Usage: &api.Usage{
+			PromptTokens:     8,
+			CompletionTokens: 12,
+			TotalTokens:      20,
+		},
+	}
+
+	// Setup mock expectations
+	// Primary provider fails
+	mockProvider1.ChatCompletionMock.Expect(context.Background(), &api.ChatCompletionRequest{
+		Model: "primary-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}).Return(nil, errors.New("primary provider failed"))
+
+	// Fallback provider succeeds
+	mockProvider2.ChatCompletionMock.Expect(context.Background(), &api.ChatCompletionRequest{
+		Model: "backup-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}).Return(expectedResp, nil)
+
+	// Execute the handler
+	ctx := context.Background()
+	resp, err := proxy.ChatCompletionsHandler(ctx, req)
+
+	// Verify results
+	require.NoError(t, err)
+	assert.Equal(t, expectedResp, resp)
+}
+
+func TestChatCompletionsHandler_AllProvidersFail(t *testing.T) {
+	// Create mock providers
+	mockProvider1 := provider.NewProviderMock(t)
+	mockProvider2 := provider.NewProviderMock(t)
+
+	// Setup test configuration with fallback
+	cfg := &config.Config{
+		Models: []*config.ModelConfig{
+			{
+				ID:       "test-model",
+				Name:     "primary-model",
+				Provider: "provider1",
+				Fallback: []string{"fallback-model"},
+			},
+			{
+				ID:       "fallback-model",
+				Name:     "backup-model",
+				Provider: "provider2",
+				Fallback: []string{},
+			},
+		},
+	}
+
+	// Create proxy with mock providers
+	proxy := &Proxy{
+		cfg: cfg,
+		providers: map[string]provider.Provider{
+			"provider1": mockProvider1,
+			"provider2": mockProvider2,
+		},
+	}
+
+	// Test request
+	req := api.ChatCompletionRequest{
+		Model: "test-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}
+
+	// Setup mock expectations - both providers fail
+	mockProvider1.ChatCompletionMock.Expect(context.Background(), &api.ChatCompletionRequest{
+		Model: "primary-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}).Return(nil, errors.New("primary provider failed"))
+
+	mockProvider2.ChatCompletionMock.Expect(context.Background(), &api.ChatCompletionRequest{
+		Model: "backup-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}).Return(nil, errors.New("fallback provider failed"))
+
+	// Execute the handler
+	ctx := context.Background()
+	resp, err := proxy.ChatCompletionsHandler(ctx, req)
+
+	// Verify results
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+	assert.Equal(t, internalerrors.ErrInternal.WithMessage("failed to get completion from any provider"), err)
+}
+
+func TestChatCompletionsHandler_FallbackModelNotFound(t *testing.T) {
+	// Create mock provider
+	mockProvider1 := provider.NewProviderMock(t)
+
+	// Setup test configuration with invalid fallback model
+	cfg := &config.Config{
+		Models: []*config.ModelConfig{
+			{
+				ID:       "test-model",
+				Name:     "primary-model",
+				Provider: "provider1",
+				Fallback: []string{"non-existent-fallback"},
+			},
+		},
+	}
+
+	// Create proxy with mock provider
+	proxy := &Proxy{
+		cfg: cfg,
+		providers: map[string]provider.Provider{
+			"provider1": mockProvider1,
+		},
+	}
+
+	// Test request
+	req := api.ChatCompletionRequest{
+		Model: "test-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}
+
+	// Setup mock expectation - primary provider fails
+	mockProvider1.ChatCompletionMock.Expect(context.Background(), &api.ChatCompletionRequest{
+		Model: "primary-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}).Return(nil, errors.New("primary provider failed"))
+
+	// Execute the handler
+	ctx := context.Background()
+	resp, err := proxy.ChatCompletionsHandler(ctx, req)
+
+	// Verify results
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+	assert.Equal(t, internalerrors.ErrInternal.WithMessage("failed to get completion from any provider"), err)
+}
+
+func TestChatCompletionsHandler_TokenMetrics(t *testing.T) {
+	// Create a mock provider
+	mockProvider := provider.NewProviderMock(t)
+
+	// Setup test configuration
+	cfg := &config.Config{
+		Models: []*config.ModelConfig{
+			{
+				ID:       "test-model",
+				Name:     "actual-model-name",
+				Provider: "test-provider",
+				Fallback: []string{},
+			},
+		},
+	}
+
+	// Create proxy with mock provider
+	proxy := &Proxy{
+		cfg: cfg,
+		providers: map[string]provider.Provider{
+			"test-provider": mockProvider,
+		},
+	}
+
+	// Test request
+	req := api.ChatCompletionRequest{
+		Model: "test-model",
+		Messages: []api.ChatMessage{
+			{
+				Role:    api.ChatMessageRoleUser,
+				Content: createChatContent("Hello, world!"),
+			},
+		},
+	}
+
+	// Test cases for different token counts
+	testCases := []struct {
+		name  string
+		usage *api.Usage
+	}{
+		{
+			name: "all tokens present",
+			usage: &api.Usage{
+				PromptTokens:     10,
+				CompletionTokens: 15,
+				TotalTokens:      25,
+			},
+		},
+		{
+			name: "zero tokens",
+			usage: &api.Usage{
+				PromptTokens:     0,
+				CompletionTokens: 0,
+				TotalTokens:      0,
+			},
+		},
+		{
+			name: "partial tokens",
+			usage: &api.Usage{
+				PromptTokens:     5,
+				CompletionTokens: 0,
+				TotalTokens:      10,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Expected response with specific token usage
+			expectedResp := &api.ChatCompletionResponse{
+				Id:      "test-id",
+				Object:  "chat.completion",
+				Created: 1234567890,
+				Model:   "actual-model-name",
+				Choices: []api.ChatCompletionChoice{
+					{
+						Index: 0,
+						Message: api.ChatMessage{
+							Role:    api.ChatMessageRoleAssistant,
+							Content: createChatContent("Hello! How can I help you today?"),
+						},
+						FinishReason: api.ChatCompletionChoiceFinishReasonStop,
+					},
+				},
+				Usage: tc.usage,
 			}
-			reqBodyBytes, _ := json.Marshal(reqBody)
 
-			rec := httptest.NewRecorder()
-			req, _ := http.NewRequest("POST", "/v1/chat/completions", bytes.NewBuffer(reqBodyBytes))
-			req.Header.Set("Content-Type", "application/json")
+			// Setup mock expectation
+			mockProvider.ChatCompletionMock.Expect(context.Background(), &api.ChatCompletionRequest{
+				Model: "actual-model-name",
+				Messages: []api.ChatMessage{
+					{
+						Role:    api.ChatMessageRoleUser,
+						Content: createChatContent("Hello, world!"),
+					},
+				},
+			}).Return(expectedResp, nil)
 
-			r.ServeHTTP(rec, req)
+			// Execute the handler
+			ctx := context.Background()
+			resp, err := proxy.ChatCompletionsHandler(ctx, req)
 
-			assert.Equal(t, tt.expectedStatus, rec.Code)
-			if tt.expectedStatus == http.StatusOK {
-				var resp types.ChatCompletionResponse
-				json.Unmarshal(rec.Body.Bytes(), &resp)
-				assert.Equal(t, tt.expectedID, resp.ID)
-			}
+			// Verify results
+			require.NoError(t, err)
+			assert.Equal(t, expectedResp, resp)
+			assert.Equal(t, tc.usage, resp.Usage)
 		})
 	}
 }

@@ -4,15 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 
+	"github.com/dmitrii/llm-gateway/api"
 	"github.com/dmitrii/llm-gateway/internal/config"
+	"github.com/dmitrii/llm-gateway/internal/errors"
 	"github.com/dmitrii/llm-gateway/internal/provider"
 	"github.com/dmitrii/llm-gateway/internal/provider/dummy"
 	langchaincompatible "github.com/dmitrii/llm-gateway/internal/provider/langchain_compatible"
-	"github.com/dmitrii/llm-gateway/internal/types"
-	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tmc/langchaingo/llms"
@@ -68,7 +66,7 @@ func NewProxy(cfg *config.Config) (*Proxy, error) {
 		id := pCfg.ID
 		if pCfg.Provider == config.ProviderDummy {
 			providers[id] = dummy.NewDummyProvider()
-			continue // Dummy provider is already added
+			continue
 		}
 
 		var llm llms.Model
@@ -135,13 +133,7 @@ func NewProxy(cfg *config.Config) (*Proxy, error) {
 }
 
 // ChatCompletionsHandler handles requests to the /v1/chat/completions endpoint.
-func (p *Proxy) ChatCompletionsHandler(c *gin.Context) {
-	var req openai.ChatCompletionNewParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return
-	}
-
+func (p *Proxy) ChatCompletionsHandler(ctx context.Context, req api.ChatCompletionRequest) (*api.ChatCompletionResponse, error) {
 	var modelConfig *config.ModelConfig
 	for _, m := range p.cfg.Models {
 		if m.ID == req.Model {
@@ -151,14 +143,13 @@ func (p *Proxy) ChatCompletionsHandler(c *gin.Context) {
 	}
 
 	if modelConfig == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Model not found"})
-		return
+		return nil, errors.ErrNotFound.WithMessage("model not found in config")
 	}
 
 	modelsToTry := []string{req.Model}
 	modelsToTry = append(modelsToTry, modelConfig.Fallback...)
 
-	var resp *types.ChatCompletionResponse
+	var resp *api.ChatCompletionResponse
 	var err error
 
 	for _, modelID := range modelsToTry {
@@ -187,7 +178,7 @@ func (p *Proxy) ChatCompletionsHandler(c *gin.Context) {
 		attemptReq := req
 		attemptReq.Model = currentModelConfig.Name
 
-		resp, err = llmProvider.ChatCompletion(c.Request.Context(), &attemptReq)
+		resp, err = llmProvider.ChatCompletion(ctx, &attemptReq)
 		if err != nil {
 			slog.Error("Provider chat completion failed", "error", err, "model", currentModelConfig.Name, "provider", providerName)
 			continue // Try next model
@@ -204,9 +195,8 @@ func (p *Proxy) ChatCompletionsHandler(c *gin.Context) {
 			totalTokensTotal.WithLabelValues(resp.Model, providerName).Add(float64(resp.Usage.TotalTokens))
 		}
 
-		c.JSON(http.StatusOK, resp)
-		return
+		return resp, nil
 	}
 
-	c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get completion from any provider"})
+	return nil, errors.ErrInternal.WithMessage("failed to get completion from any provider")
 }

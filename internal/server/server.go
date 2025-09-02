@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/dmitrii/llm-gateway/api"
 	"github.com/dmitrii/llm-gateway/internal/config"
 	"github.com/dmitrii/llm-gateway/internal/proxy"
 	"github.com/gin-gonic/gin"
@@ -41,11 +42,10 @@ func New(cfg *config.Config, logger *slog.Logger) (*gin.Engine, error) {
 		return nil, fmt.Errorf("failed to create proxy: %w", err)
 	}
 
-	// API handler
-	v1 := r.Group("/v1")
-	{
-		v1.POST("/chat/completions", llmProxy.ChatCompletionsHandler)
-	}
+	handler := NewProxyHandler(llmProxy)
+	api.RegisterHandlersWithOptions(r, handler, api.GinServerOptions{
+		BaseURL: "/v1",
+	})
 
 	// Read and process OpenAPI spec
 	openAPITemplate, err := template.ParseFiles(cfg.OpenAPI.SpecPath)
